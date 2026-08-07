@@ -1,0 +1,4 @@
+{
+  "_comment": "Handlers arrive with L3 (skill telemetry), L4 (turn counter) and L5 (dream trigger). Declared empty so the plugin loads cleanly before they exist.",
+  "hooks": {}
+}

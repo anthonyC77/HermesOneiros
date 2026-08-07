@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Credentials — oneiros reads these from ~/.claude, never from the repo.
+# Listed anyway so a stray copy cannot be committed by accident.
+*.env
+!*.env.example
+
+# State: oneiros writes to ~/.claude/oneiros (or $ONEIROS_HOME), outside the
+# tree. A local override pointed here must not be committed.
+sessions.db

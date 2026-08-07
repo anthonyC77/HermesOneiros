@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.20,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oneiros"
+version = "0.1.0"
+description = "An agent that learns from its sessions, keeps curated memory, and dreams."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+# The Agent SDK is only needed to *drive* the harness (L4+). Memory, the
+# session index and the MCP server all work without it, which is why it is not
+# a hard dependency: `oneiros doctor` on a machine without it should report a
+# missing runner, not fail to start.
+sdk = ["claude-agent-sdk>=0.1,<1"]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+oneiros = "oneiros.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oneiros"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
