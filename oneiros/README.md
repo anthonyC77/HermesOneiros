@@ -32,9 +32,14 @@ Link the plugin so the harness picks up its commands:
 ```bash
 # POSIX
 ln -s "$PWD/plugin" ~/.claude/plugins/oneiros
-# Windows (elevated or developer mode)
-mklink /D "%USERPROFILE%\.claude\plugins\oneiros" "%CD%\plugin"
+# Windows — a junction needs no elevation; /D does
+mklink /J "%USERPROFILE%\.claude\plugins\oneiros" "%CD%\plugin"
 ```
+
+Prefer `/J`. A symbolic link (`/D`) requires an elevated prompt or developer
+mode, and the failure is a permission error most people read as "the plugin
+cannot be installed". A junction is the same thing for a local directory and
+works from an ordinary shell.
 
 Register the session-search MCP server in `~/.claude/settings.json`, **by file
 path**:
@@ -110,6 +115,7 @@ around.
 |---|---|---|
 | L0 | project, paths, config, `doctor` | done |
 | L1 | curated memory: bounds, guard, gate, snapshot | done |
+| L1+ | `SessionStart` hook carrying the snapshot into a live session | done |
 | L2 | session index, query translation, MCP server | done |
 | L3 | skill registry, telemetry, lifecycle, rollback | not started |
 | L4 | Agent SDK runners, post-turn review | not started |

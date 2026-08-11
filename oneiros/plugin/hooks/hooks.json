@@ -1,4 +1,17 @@
 {
-  "_comment": "Handlers arrive with L3 (skill telemetry), L4 (turn counter) and L5 (dream trigger). Declared empty so the plugin loads cleanly before they exist.",
-  "hooks": {}
+  "_comment": "Handlers for skill telemetry (L3), the turn counter (L4) and the dream trigger (L5) are not written yet. SessionStart carries curated memory into the session — see session_start_memory.py. 'resume' is deliberately absent: the block is already in the replayed context, and firing there would duplicate it.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/session_start_memory.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }

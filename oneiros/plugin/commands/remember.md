@@ -1,7 +1,7 @@
 ---
 description: Save a durable fact to curated memory
 argument-hint: <the fact to remember>
-allowed-tools: Bash(oneiros memory:*)
+allowed-tools: Bash(python -m oneiros memory:*)
 ---
 
 Save this to memory: **$ARGUMENTS**
@@ -24,13 +24,17 @@ of facts that stay true. Before writing:
 Then run:
 
 ```
-oneiros memory add "<the compressed fact>" [--target user]
+python -m oneiros memory add "<the compressed fact>" [--target user]
 ```
 
+Use `python -m oneiros`, not a bare `oneiros`: the console-script shim is not
+always installed, and when it is missing the bare form fails with a "not
+recognised" error that reads like the plugin is broken.
+
 If the store is full the command fails and lists what is already there. That is
-the signal to consolidate — merge overlapping entries with `oneiros memory
-replace`, or drop stale ones with `oneiros memory remove` — and then retry, all
-in this turn. Do not ask the user to make room; make it.
+the signal to consolidate — merge overlapping entries with `python -m oneiros
+memory replace`, or drop stale ones with `python -m oneiros memory remove` — and
+then retry, all in this turn. Do not ask the user to make room; make it.
 
 The write lands on disk now but does not reach the system prompt until the next
 session. Say so if the user seems to expect an immediate effect.

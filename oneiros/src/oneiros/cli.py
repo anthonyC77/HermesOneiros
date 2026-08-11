@@ -325,7 +325,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _use_utf8(stream) -> None:
+    """Print UTF-8 whatever the console codepage is.
+
+    The rendered memory block is framed with U+2550 box characters, and past
+    sessions hold every script a user has ever pasted. Neither survives the
+    Windows default of cp1252: ``memory show`` on a non-empty store died with a
+    ``UnicodeEncodeError`` before this existed. The text itself is not
+    negotiable — it is prompt material, byte-identical to what the agent sees —
+    so the console is what bends.
+
+    ``errors="replace"`` rather than ``strict``: a character the terminal cannot
+    draw should cost a glyph, never the command.
+    """
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass  # a redirected or exotic stream; nothing to gain by failing here
+
+
 def main(argv: list[str] | None = None) -> int:
+    _use_utf8(sys.stdout)
+    _use_utf8(sys.stderr)
     args = build_parser().parse_args(argv)
     cfg.load_env()
     handlers = {"doctor": cmd_doctor, "memory": cmd_memory, "sessions": cmd_sessions}
