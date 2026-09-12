@@ -1,0 +1,273 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "horus/run-events/1",
+ "title": "Contrat de run en événements",
+ "description": "Un fichier .events.jsonl : une ligne d'en-tête ($defs/header), puis une ligne par événement. Chaque événement est l'un des dix-sept genres de $defs/kinds — la racine est leur oneOf. Ce que le schéma ne sait pas dire vit dans verifier_evenements() de plier_evenements.py : seq contigu depuis 0, run.start en tête, run.end en queue, run égal à run_id. Miroir TypeScript : ruche/src/core/events.ts, vérifié par ruche/test/contrat.test.ts.",
+ "$defs": {
+  "status": {"type": "string", "enum": ["completed", "refused", "clarification", "failed", "cancelled", "quota_exceeded"]},
+  "origin": {"type": "string", "enum": ["observed", "derived", "human"], "description": "observé (jamais recalculé), dérivé (recalculable : les drapeaux), ou geste humain"},
+  "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+  "cost": {
+   "type": "object", "additionalProperties": false,
+   "properties": {
+    "calls": {"type": "integer", "minimum": 0},
+    "tok_in": {"type": "integer", "minimum": 0},
+    "tok_out": {"type": "integer", "minimum": 0},
+    "eur": {"type": "number", "minimum": 0}
+   }
+  },
+  "policy": {
+   "type": "object",
+   "description": "La même forme que policy du contrat de run (run_contract.schema.json). quotas accepte en plus max_calls_par_agent, lu par les détecteurs de Ruche.",
+   "required": ["agent", "allowed_tools", "quotas", "identity"],
+   "properties": {
+    "agent": {"type": "string"},
+    "allowed_tools": {"type": "array", "items": {"type": "string"}},
+    "quotas": {
+     "type": "object",
+     "required": ["max_calls", "max_tokens", "max_wall_clock_ms", "max_eur"],
+     "properties": {
+      "max_calls": {"type": "integer", "minimum": 0},
+      "max_calls_par_agent": {"type": "integer", "minimum": 0},
+      "max_tokens": {"type": "integer", "minimum": 0},
+      "max_wall_clock_ms": {"type": "integer", "minimum": 0},
+      "max_eur": {"type": "number", "minimum": 0}
+     }
+    },
+    "identity": {
+     "type": "object",
+     "required": ["principal"],
+     "properties": {"principal": {"type": "string"}, "si_role": {"type": "string"}}
+    }
+   }
+  },
+  "agent": {
+   "type": "object", "additionalProperties": false,
+   "required": ["id", "role", "depth"],
+   "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "role": {"type": "string"},
+    "depth": {"type": "integer", "minimum": -1, "description": "-1 pour l'humain"}
+   }
+  },
+  "header": {
+   "type": "object", "additionalProperties": false,
+   "required": ["contract_version", "run_id", "task_id", "agents", "policy"],
+   "properties": {
+    "contract_version": {"type": "integer", "enum": [1]},
+    "run_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1, "description": "le cas du golden set, ou le nom de la tâche"},
+    "agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}},
+    "policy": {"$ref": "#/$defs/policy"}
+   }
+  },
+  "env": {
+   "v": {"type": "integer", "enum": [1]},
+   "seq": {"type": "integer", "minimum": 0, "description": "ordre logique : part de 0, avance de 1 par ligne, sans trou"},
+   "t": {"type": "number", "minimum": 0, "description": "horloge vécue, ms depuis le début du run"},
+   "run": {"type": "string", "minLength": 1},
+   "actor": {"type": "string", "minLength": 1},
+   "origin": {"$ref": "#/$defs/origin"},
+   "ref": {"type": "string", "minLength": 1, "description": "empreinte du contenu volumineux, stocké hors journal"},
+   "cost": {"$ref": "#/$defs/cost"}
+  },
+  "kinds": {
+   "run.start": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "task", "title", "policy"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "run.start"},
+     "task": {"type": "string", "minLength": 1},
+     "title": {"type": "string"},
+     "policy": {"$ref": "#/$defs/policy"}
+    }
+   },
+   "run.end": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "status", "totals"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "run.end"},
+     "status": {"$ref": "#/$defs/status"},
+     "totals": {
+      "type": "object", "additionalProperties": false,
+      "required": ["calls", "tok_in", "tok_out", "eur", "wall_clock_ms", "human_interventions"],
+      "properties": {
+       "calls": {"type": "integer", "minimum": 0},
+       "tok_in": {"type": "integer", "minimum": 0},
+       "tok_out": {"type": "integer", "minimum": 0},
+       "eur": {"type": "number", "minimum": 0},
+       "wall_clock_ms": {"type": "integer", "minimum": 0},
+       "human_interventions": {"type": "integer", "minimum": 0}
+      }
+     }
+    }
+   },
+   "agent.spawn": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "role", "parent", "depth"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "agent.spawn"},
+     "role": {"type": "string"},
+     "parent": {"type": ["string", "null"]},
+     "depth": {"type": "integer", "minimum": -1}
+    }
+   },
+   "agent.end": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "status"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "agent.end"},
+     "status": {"$ref": "#/$defs/status"}
+    }
+   },
+   "agent.stop.attempt": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "agent.stop.attempt"}
+    }
+   },
+   "think.start": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "summary"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "think.start"},
+     "summary": {"type": "string"}
+    }
+   },
+   "think.end": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "summary"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "think.end"},
+     "summary": {"type": "string"}
+    }
+   },
+   "tool.start": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "tool", "args"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "tool.start"},
+     "tool": {"type": "string", "minLength": 1},
+     "args": {"type": "string"}
+    }
+   },
+   "tool.end": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "tool", "args", "ok", "ms"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "tool.end"},
+     "tool": {"type": "string", "minLength": 1},
+     "args": {"type": "string"},
+     "ok": {"type": "boolean"},
+     "ms": {"type": "integer", "minimum": 0},
+     "out": {"type": "string"}
+    }
+   },
+   "hook.allow": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "hook", "event", "exit", "reason"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "hook.allow"},
+     "hook": {"type": "string"},
+     "event": {"type": "string"},
+     "exit": {"type": "integer"},
+     "reason": {"type": "string"}
+    }
+   },
+   "hook.deny": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "hook", "event", "exit", "reason"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "hook.deny"},
+     "hook": {"type": "string"},
+     "event": {"type": "string"},
+     "exit": {"type": "integer"},
+     "reason": {"type": "string"},
+     "tool": {"type": "string"}
+    }
+   },
+   "wait.start": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "on"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "wait.start"},
+     "on": {"type": "string"}
+    }
+   },
+   "wait.end": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "on"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "wait.end"},
+     "on": {"type": "string"}
+    }
+   },
+   "msg": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "to", "text"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "msg"},
+     "to": {"type": "string", "minLength": 1},
+     "text": {"type": "string"}
+    }
+   },
+   "human": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "to", "text"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "human"},
+     "to": {"type": "string", "minLength": 1},
+     "text": {"type": "string"}
+    }
+   },
+   "flag": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "rule", "severity", "why", "evidence", "hand"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "flag"},
+     "rule": {"type": "string"},
+     "severity": {"$ref": "#/$defs/severity"},
+     "why": {"type": "string"},
+     "evidence": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+     "hand": {"type": "boolean"}
+    }
+   },
+   "flag.clear": {
+    "type": "object", "additionalProperties": false,
+    "required": ["v", "seq", "t", "run", "actor", "origin", "kind", "reason"],
+    "properties": {
+     "v": {"$ref": "#/$defs/env/v"}, "seq": {"$ref": "#/$defs/env/seq"}, "t": {"$ref": "#/$defs/env/t"}, "run": {"$ref": "#/$defs/env/run"}, "actor": {"$ref": "#/$defs/env/actor"}, "origin": {"$ref": "#/$defs/env/origin"}, "ref": {"$ref": "#/$defs/env/ref"}, "cost": {"$ref": "#/$defs/env/cost"},
+     "kind": {"const": "flag.clear"},
+     "reason": {"type": "string"}
+    }
+   }
+  }
+ },
+ "oneOf": [
+  {"$ref": "#/$defs/kinds/run.start"}, {"$ref": "#/$defs/kinds/run.end"},
+  {"$ref": "#/$defs/kinds/agent.spawn"}, {"$ref": "#/$defs/kinds/agent.end"}, {"$ref": "#/$defs/kinds/agent.stop.attempt"},
+  {"$ref": "#/$defs/kinds/think.start"}, {"$ref": "#/$defs/kinds/think.end"},
+  {"$ref": "#/$defs/kinds/tool.start"}, {"$ref": "#/$defs/kinds/tool.end"},
+  {"$ref": "#/$defs/kinds/hook.allow"}, {"$ref": "#/$defs/kinds/hook.deny"},
+  {"$ref": "#/$defs/kinds/wait.start"}, {"$ref": "#/$defs/kinds/wait.end"},
+  {"$ref": "#/$defs/kinds/msg"}, {"$ref": "#/$defs/kinds/human"},
+  {"$ref": "#/$defs/kinds/flag"}, {"$ref": "#/$defs/kinds/flag.clear"}
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "horus/verdicts/1",
+ "title": "Une ligne de verdict",
+ "description": "Un fichier verdicts.jsonl : une ligne par cas jugé. C'est le format de --judge-file dans run_tasks_eval.py et le seul que Ruche accepte en ?eval=. reason est obligatoire et non vide : un verdict sans explication ne se conteste pas (modele/rules/evals.md). Le verdict.json de coachingia s'y projette de son côté.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["task_id", "pass", "reason"],
+ "properties": {
+  "task_id": {"type": "string", "minLength": 1, "description": "le cas du golden set"},
+  "pass": {"type": "boolean"},
+  "reason": {"type": "string", "minLength": 1}
+ }
+}

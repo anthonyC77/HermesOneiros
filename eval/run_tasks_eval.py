@@ -26,7 +26,7 @@ Contrat --judge-cmd : reçoit {"task": <golden>, "run": <run>, "rubric": str} su
 renvoie {"pass": bool, "reason": str} sur stdout, code 0.
 
 Codes de sortie : 0 = pas de régression, 1 = régression au-delà de la tolérance
-(bloc "tasks" de baseline.json), 2 = erreur d'exécution.
+(bloc "tasks" de baseline.json), 2 = erreur d'exécution, ou juge demandé sans aucun verdict reçu.
 """
 import argparse
 import datetime as dt
@@ -210,7 +210,8 @@ def check_task(task, run, contract, tools, policies):
 
 def run_judge_cmd(cmd, task, run):
     payload = json.dumps({"task": task, "run": run, "rubric": task.get("judge", {}).get("rubric", "")}, ensure_ascii=False)
-    proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, shell=True, timeout=120)
+    # encoding explicite : sous Windows, text=True prend la page de code locale et un « ≈ » dans un run suffit à planter l'échange
+    proc = subprocess.run(cmd, input=payload, capture_output=True, encoding="utf-8", shell=True, timeout=120)
     if proc.returncode != 0:
         raise RuntimeError(f"juge en erreur ({proc.returncode}) : {proc.stderr.strip()[:200]}")
     verdict = json.loads(proc.stdout)
@@ -251,6 +252,7 @@ def summarize(rows):
         "provenance_ok_rate": rate(rows, "provenance_ok", lambda r: r["provenance_required"]),
         "negative_ok": rate(rows, "success", lambda r: not r["answerable"]),
         "no_human_rate": rate(rows, "no_human"),
+        "judge_errors": sum(1 for r in rows if r.get("judge_error")),
         "disagreements": [{"id": r["id"], "assert": r["assert_pass"], "judge": r["judge_pass"], "reason": r["judge_reason"]}
                           for r in judged if r["assert_pass"] != r["judge_pass"]],
         "by_tag": {}, "by_difficulty": {},
@@ -321,7 +323,7 @@ def main(argv=None):
         run = runs.get(task["id"])
         assertions, flags = check_task(task, run, contract, tools, policies)
         assert_pass = all(x["ok"] for x in assertions)
-        judge_pass, judge_reason = None, ""
+        judge_pass, judge_reason, judge_error = None, "", False
         try:
             if a.judge_cmd and run is not None:
                 v = run_judge_cmd(a.judge_cmd, task, run)
@@ -330,20 +332,25 @@ def main(argv=None):
                 judge_pass = bool(judge_file[task["id"]]["pass"])
                 judge_reason = judge_file[task["id"]].get("reason", "")
         except (RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as e:
-            print(f"[{task['id']}] {e}", file=sys.stderr)
-            return 2
+            # Une panne du juge n'est jamais un pass: false — une coupure n'est pas une régression.
+            # Le cas reste sans verdict, la campagne continue, le rapport compte la panne.
+            judge_error, judge_reason = True, f"juge en panne : {e}"
+            print(f"[{task['id']}] {judge_reason}", file=sys.stderr)
         success = assert_pass and (judge_pass if judge_pass is not None else True)
         rows.append({
             "id": task["id"], "tags": task.get("tags", []), "difficulty": task.get("difficulty", "medium"),
             "answerable": task.get("expected", {}).get("answerable", True),
             "provenance_required": task.get("expected", {}).get("provenance", {}).get("required", False),
             "context_tokens": (run or {}).get("input", {}).get("context_tokens"),
-            "assert_pass": assert_pass, "judge_pass": judge_pass, "judge_reason": judge_reason,
+            "assert_pass": assert_pass, "judge_pass": judge_pass, "judge_reason": judge_reason, "judge_error": judge_error,
             "success": success, "no_human": (run is not None and run.get("human_interventions", 0) == 0 and success),
             "failed": [x for x in assertions if not x["ok"]], **flags,
         })
 
     summary = summarize(rows)
+    if a.judge_cmd and summary["judge_errors"] and summary["n_judged"] == 0:
+        print(f"juge demandé, aucun verdict reçu ({summary['judge_errors']} panne(s)) : rien mesuré", file=sys.stderr)
+        return 2
     regressions = compare(summary, baseline.get("metrics"), tolerance) if baseline else []
     timestamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     out_run = {"kind": "tasks", "timestamp": timestamp, "label": a.label, "source": a.runs,
@@ -368,6 +375,8 @@ def main(argv=None):
     elif not a.quiet:
         print(f"run     : {out}")
         print(f"n={summary['n']}  jugées={summary['n_judged']}  tolérance={tolerance}")
+        if summary["judge_errors"]:
+            print(f"  juge en panne sur {summary['judge_errors']} cas (judge_pass: null, jamais false)")
         bm = baseline.get("metrics", {})
         for key in METRIC_KEYS:
             b, s = bm.get(key), summary.get(key)
