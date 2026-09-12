@@ -1,0 +1,27 @@
+{
+ "version": "5d2ec3ff1fe8",
+ "hooks": "sh",
+ "pose_le": "2026-09-12",
+ "fichiers": {
+  ".claude/agents/codeur.md": "bf9aa5ca3aa81b43",
+  ".claude/agents/relecteur.md": "20d13bafe5baebc5",
+  ".claude/agents/testeur.md": "33ece03dcef4c1fd",
+  ".claude/hooks/test_hooks.py": "2ba4e420a19b86d4",
+  ".claude/skills/cadrer/SKILL.md": "09ebd787ec4a7cfd",
+  ".claude/skills/etat/SKILL.md": "33cecb205e208020",
+  ".claude/skills/livrer/SKILL.md": "44cb30bf0ced4627",
+  "eval/check_nodes.py": "c916ca29466087ba",
+  "eval/check_tool_schemas.py": "581901272f749b85",
+  "eval/fixtures/judge.jsonl": "56acd5acc4622ac3",
+  "eval/fixtures/make_fixtures.py": "ec56dbf28f7abc3a",
+  "eval/fixtures/results_retrieval.jsonl": "764a4370862cac51",
+  "eval/fixtures/runs_tasks.jsonl": "af14b08e1d459b95",
+  "eval/gen_tool_schemas.py": "ed248797e6173280",
+  "eval/jsonschema_lite.py": "e28799d14d11653a",
+  "eval/run_eval.py": "b33e39435ecade16",
+  "eval/run_tasks_eval.py": "7cbb15d08e2acd30",
+  "eval/schemas/run_contract.schema.json": "7f44e16eecec1490",
+  "eval/tests/test_eval.py": "ed70f79f74e75e8c",
+  "eval/width_report.py": "b2c615929a1b73df"
+ }
+}
