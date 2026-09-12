@@ -1,0 +1,54 @@
+{
+  "_lisez_moi": [
+    "Les cles de modele ci-dessous sont des PLACEHOLDERS. Le catalogue LM Studio",
+    "bouge vite. Avant la premiere bascule, relevez les vraies cles avec :",
+    "    lms ls --json",
+    "et remplacez chaque 'model_key'. L'identifiant renvoye par 'lms load' fait",
+    "foi (LIAISON_HERMES_MAC.md 4.5) -- c'est pourquoi on le force ici via",
+    "'identifier' au lieu de le subir.",
+    "",
+    "context_length : 32768 minimum pour un usage agentique. En dessous, le",
+    "prompt est tronque SANS ERREUR et le tool calling part en vrille (5.2).",
+    "Et il faut que KV Cache Quantization soit DESACTIVEE cote LM Studio,",
+    "sinon cette valeur est purement decorative.",
+    "",
+    "Le profil 'brain' exige un moteur MLX recent (architecture Qwen3_5). Le",
+    "Mac n'ayant pas de route par defaut, la mise a jour du runtime et le",
+    "telechargement des poids doivent tenir dans la MEME fenetre reseau, et le",
+    "modele doit etre charge une fois AVANT de refermer. Sinon : 16 Go de poids",
+    "que rien sur la machine ne sait lire, et il faut rouvrir le reseau."
+  ],
+
+  "lms_binary": "lms",
+  "state_file": "~/.mac-ia/state.json",
+  "hold_file": "~/.mac-ia/hermes.hold",
+
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080
+  },
+
+  "profiles": {
+    "code": {
+      "model_key": "qwen3-coder-30b-a3b-instruct-mlx",
+      "identifier": "code",
+      "context_length": 32768,
+      "ttl": null,
+      "note": "Profil d'Hermes. Le hold_file protege ce profil du dechargement."
+    },
+    "brain": {
+      "model_key": "qwen3.8-27b-mlx",
+      "identifier": "brain",
+      "context_length": 65536,
+      "ttl": null,
+      "note": "Prose : consolidation, resume, classement. Pas le modele Coder. Cle relevee sur la machine le 6 septembre 2026, pas le nom du depot HF. Modele A REFLEXION : elle ne se coupe pas (ni chat_template_kwargs ni /no_think), tout appel paie une taxe de raisonnement -- prevoir max_tokens >= 512."
+    },
+    "vr": {
+      "model_key": "qwen3-4b-instruct-2507-mlx",
+      "identifier": "vr",
+      "context_length": 8192,
+      "ttl": null,
+      "note": "Latence avant tout. Contexte court = prefill court = TTFT bas."
+    }
+  }
+}

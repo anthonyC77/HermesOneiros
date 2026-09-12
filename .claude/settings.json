@@ -1,0 +1,48 @@
+{
+  "env": {
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "5",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(python -m oneiros:*)",
+      "Bash(pip install -e:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Edit(oneiros/SPEC.md)",
+      "Write(oneiros/SPEC.md)",
+      "Edit(oneiros/TASKS.md)",
+      "Write(oneiros/TASKS.md)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-etalon.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "codeur",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate-tests.sh",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
