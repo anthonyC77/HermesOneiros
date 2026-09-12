@@ -22,7 +22,7 @@ Configuration par variables d'environnement :
     HARNAIS_JUGE_MODELE   brain                          l'identifiant forcé par le routeur
     HARNAIS_JUGE_TIMEOUT  120                            secondes — le profil brain réfléchit
 
-Le juge ne bascule jamais de profil lui-même : `mac-ia/router/profiles.py switch brain`.
+Le juge ne bascule jamais de profil lui-même : `harnais/mac-ia/router/profiles.py switch brain`.
 """
 import json
 import os
@@ -90,6 +90,9 @@ def main():
     messages = [{"role": "system", "content": SYSTEME}, {"role": "user", "content": composer(payload)}]
     try:
         reponse = appeler(messages)
+    except urllib.error.HTTPError as e:   # le serveur répond mais refuse — distinct d'un hôte injoignable
+        print(f"juge : HTTP {e.code} sur {URL} : {e.reason}", file=sys.stderr)
+        return 2
     except (urllib.error.URLError, OSError, ValueError) as e:   # refus de connexion, timeout (socket.timeout est un OSError), corps non JSON
         print(f"juge injoignable ({URL}) : {e}", file=sys.stderr)
         return 2
@@ -108,7 +111,10 @@ def main():
     if not raison:
         print("verdict sans raison : un verdict sans explication ne se conteste pas", file=sys.stderr)
         return 2
-    print(json.dumps({"pass": bool(verdict["pass"]), "reason": raison}, ensure_ascii=False))
+    if not isinstance(verdict.get("pass"), bool):
+        print("verdict sans pass booléen : un pass non booléen est une panne, pas une valeur à convertir", file=sys.stderr)
+        return 2
+    print(json.dumps({"pass": verdict["pass"], "reason": raison}, ensure_ascii=False))
     return 0
 
 

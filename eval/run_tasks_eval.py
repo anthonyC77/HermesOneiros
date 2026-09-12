@@ -215,7 +215,9 @@ def run_judge_cmd(cmd, task, run):
     if proc.returncode != 0:
         raise RuntimeError(f"juge en erreur ({proc.returncode}) : {proc.stderr.strip()[:200]}")
     verdict = json.loads(proc.stdout)
-    return {"pass": bool(verdict["pass"]), "reason": verdict.get("reason", "")}
+    if not isinstance(verdict.get("pass"), bool):
+        raise RuntimeError("juge : pass n'est pas un booléen")
+    return {"pass": verdict["pass"], "reason": verdict.get("reason", "")}
 
 
 def kappa(pairs):

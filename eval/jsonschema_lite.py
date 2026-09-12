@@ -4,6 +4,9 @@ Sous-ensemble suffisant pour les schémas générés par gen_tool_schemas.py et 
 contrat de run : type, properties, required, additionalProperties, items,
 enum, const, minimum/maximum, minLength, $ref local (#/…). Tout mot-clé inconnu est ignoré.
 
+Un $ref remplace entièrement son nœud : les mots-clés voisins d'un $ref sont ignorés
+(2020-12 les appliquerait en plus) — les schémas du harnais n'en placent jamais.
+
     errors = validate(instance, schema)   # liste de chaînes "chemin: message", vide si valide
 """
 

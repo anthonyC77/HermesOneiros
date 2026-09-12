@@ -52,6 +52,9 @@ def deplier(run):
             fin["out"] = json.dumps(appel["output"], ensure_ascii=False, sort_keys=True)
         emettre("tool.end", **fin)
     cout = run["cost"]
+    # t peut reculer ici si la somme des latences dépasse wall_clock_ms : la spec §5.3 impose que
+    # run.end porte t = wall_clock_ms, ceci n'est qu'une silhouette, et assertWellFormed côté Ruche
+    # n'exige pas que t soit monotone.
     horloge[0] = cout["wall_clock_ms"]
     emettre("run.end", status=run["status"],
             totals={"calls": cout["calls"], "tok_in": cout["tokens_in"], "tok_out": cout["tokens_out"],
@@ -88,7 +91,6 @@ def main(argv=None):
     for nom, lignes in fichiers:
         with open(os.path.join(a.out, nom), "w", encoding="utf-8") as f:
             f.write("".join(json.dumps(l, ensure_ascii=False) + "\n" for l in lignes))
-    print(f"{len(fichiers)} run(s) dépliés dans {a.out}")
     return 0
 
 

@@ -202,6 +202,11 @@ class JugeLocal(unittest.TestCase):
         p = self.juger()
         self.assertEqual(p.returncode, 2); self.assertIn("sans raison", p.stderr)
 
+    def test_pass_non_booleen_code_2(self):
+        _FauxLmStudio.reponse = "{\"pass\": \"false\", \"reason\": \"x\"}"
+        p = self.juger()
+        self.assertEqual(p.returncode, 2); self.assertEqual(p.stdout.strip(), ""); self.assertIn("booléen", p.stderr)
+
     def test_ne_transmet_jamais_la_sortie_attendue(self):
         _FauxLmStudio.reponse = "{\"pass\": true, \"reason\": \"ok\"}"
         _FauxLmStudio.recues.clear()
@@ -312,6 +317,12 @@ class Evenements(unittest.TestCase):
         for i, e in enumerate(evs): e["seq"] = i
         self.refuse(self.entete, evs, "run.start")
 
+    def test_refuse_deux_run_start(self):
+        evs = json.loads(json.dumps(self.evenements))
+        evs.insert(1, json.loads(json.dumps(evs[0])))   # un second run.start, en position 1
+        for i, e in enumerate(evs): e["seq"] = i
+        self.refuse(self.entete, evs, "run.start")
+
     def test_les_verdicts_passent_leur_schema(self):
         schema = plier_evenements.charger_schema("verdicts.schema.json")
         for v in run_tasks_eval.load_jsonl(os.path.join(EVAL, "fixtures", "judge.jsonl")):
@@ -338,23 +349,23 @@ class Plier(unittest.TestCase):
         cls.schema = plier_evenements.charger_schema("run_events.schema.json")
         cls.contrat = plier_evenements.charger_schema("run_contract.schema.json")
         cls.entete, cls.evenements = plier_evenements.charger(Evenements.FIXTURE, cls.schema)
-        cls.the_run = plier_evenements.plier(cls.entete, cls.evenements)
+        cls.plie = plier_evenements.plier(cls.entete, cls.evenements)
 
     def test_conforme_au_contrat(self):
-        self.assertEqual(jsonschema_lite.validate(self.the_run, self.contrat), [])
+        self.assertEqual(jsonschema_lite.validate(self.plie, self.contrat), [])
 
     def test_champ_a_champ(self):
         for k, v in self.ATTENDU.items():
-            self.assertEqual(self.the_run[k], v, k)
-        self.assertEqual(self.the_run["policy"], self.entete["policy"])
-        self.assertNotIn("cancelled", self.the_run); self.assertNotIn("context_tokens", self.the_run["input"])
+            self.assertEqual(self.plie[k], v, k)
+        self.assertEqual(self.plie["policy"], self.entete["policy"])
+        self.assertNotIn("cancelled", self.plie); self.assertNotIn("context_tokens", self.plie["input"])
 
     def test_les_appels_d_outils_dans_l_ordre_des_debuts(self):
-        self.assertEqual([(c["tool"], c["ok"], c.get("latency_ms")) for c in self.the_run["tool_calls"]], self.OUTILS)
-        refuse = self.the_run["tool_calls"][5]
+        self.assertEqual([(c["tool"], c["ok"], c.get("latency_ms")) for c in self.plie["tool_calls"]], self.OUTILS)
+        refuse = self.plie["tool_calls"][5]
         self.assertEqual(refuse["input"], {"args": "eval/schemas/tools/rechercher_documents.schema.json"})
         self.assertIsNone(refuse["output"]); self.assertNotIn("latency_ms", refuse)
-        self.assertEqual(self.the_run["tool_calls"][0]["output"], "24 lignes")
+        self.assertEqual(self.plie["tool_calls"][0]["output"], "24 lignes")
 
     def test_un_run_annule_porte_cancelled(self):
         evs = json.loads(json.dumps(self.evenements)); evs[-1]["status"] = "cancelled"
@@ -375,6 +386,42 @@ class Plier(unittest.TestCase):
             open(tronque, "w", encoding="utf-8").write("\n".join(lignes[:-1]) + "\n")
             self.assertEqual(plier_evenements.main([Evenements.FIXTURE, tronque, "--out", out]), 2)
             self.assertFalse(os.path.exists(out))
+
+    def test_refuse_puis_reessaye_a_l_identique(self):
+        """Un hook.deny PreToolUse ferme le tool.start en attente le plus récent du même (actor, tool) :
+        un nouvel essai identique (mêmes actor/tool/args) n'hérite pas du refus du précédent."""
+        run_id, policy = self.entete["run_id"], self.entete["policy"]
+
+        def env(seq, kind, actor="codeur", **champs):
+            e = {"v": 1, "seq": seq, "t": seq * 100, "run": run_id, "actor": actor, "origin": "observed", "kind": kind}
+            e.update(champs)
+            return e
+
+        evenements = [
+            env(0, "run.start", actor="orchestrateur", task=self.entete["task_id"], title="t", policy=policy),
+            env(1, "tool.start", tool="Write", args="f.txt"),
+            env(2, "hook.deny", hook="guard.sh", event="PreToolUse", exit=2, reason="refus", tool="Write"),
+            env(3, "tool.start", tool="Write", args="f.txt"),
+            env(4, "tool.end", tool="Write", args="f.txt", ok=True, ms=1),
+            env(5, "run.end", actor="orchestrateur", status="completed",
+                totals={"calls": 1, "tok_in": 0, "tok_out": 0, "eur": 0.0, "wall_clock_ms": 1, "human_interventions": 0}),
+        ]
+        plier_evenements.verifier_evenements(self.entete, evenements, self.schema, nom="test")
+        run = plier_evenements.plier(self.entete, evenements)
+        tool_calls = run["tool_calls"]
+        self.assertEqual([(c["tool"], c["ok"], c.get("latency_ms")) for c in tool_calls],
+                         [("Write", False, None), ("Write", True, 1)])
+
+    def test_refuse_un_json_illisible(self):
+        with tempfile.TemporaryDirectory() as d:
+            chemin = os.path.join(d, "cassé.events.jsonl")
+            with open(chemin, "w", encoding="utf-8") as f:
+                f.write(json.dumps(self.entete, ensure_ascii=False) + "\n")
+                f.write(json.dumps(self.evenements[0], ensure_ascii=False) + "\n")
+                f.write("{oops\n")
+            with self.assertRaises(ValueError) as cm:
+                plier_evenements.charger(chemin, self.schema)
+            self.assertIn(chemin, str(cm.exception)); self.assertIn("ligne 3", str(cm.exception))
 
 
 class Deplier(unittest.TestCase):

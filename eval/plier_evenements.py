@@ -61,6 +61,8 @@ def verifier_evenements(entete, evenements, schema, nom="<événements>"):
             refus(f"ligne {ligne} : trou dans seq, attendu {i}, reçu {e['seq']}")
         if e["run"] != entete["run_id"]:
             refus(f"ligne {ligne} : run {e['run']!r} ne correspond pas au run_id de l'en-tête")
+    if sum(1 for e in evenements if e["kind"] == "run.start") != 1:
+        refus("plus d'un run.start dans le fichier")
     if evenements[0]["kind"] != "run.start":
         refus("le premier événement n'est pas run.start")
     if evenements[-1]["kind"] != "run.end":
@@ -69,8 +71,15 @@ def verifier_evenements(entete, evenements, schema, nom="<événements>"):
 
 def charger(chemin, schema):
     """Un fichier .events.jsonl → (en-tête, événements), vérifié."""
+    lignes = []
     with open(chemin, encoding="utf-8") as f:
-        lignes = [json.loads(l) for l in f if l.strip()]
+        for n, l in enumerate(f, start=1):
+            if not l.strip():
+                continue
+            try:
+                lignes.append(json.loads(l))
+            except ValueError as e:
+                raise ValueError(f"{chemin} ligne {n} : JSON illisible : {e}") from e
     if not lignes:
         raise ValueError(f"{chemin} : fichier vide")
     verifier_evenements(lignes[0], lignes[1:], schema, nom=str(chemin))
@@ -81,21 +90,37 @@ def plier(entete, evenements):
     """Un run résumé (contrat 1.0) depuis un run en événements — la table de correspondance de la spec §5.2.
 
     Les appels d'outils sont appariés par (actor, tool, args), dans l'ordre : apparier par acteur seul
-    ferait qu'un tool.start jamais revenu (refusé par un hook) vole le tool.end suivant."""
+    ferait qu'un tool.start jamais revenu (refusé par un hook) vole le tool.end suivant.
+
+    Un hook.deny sur PreToolUse porte `tool` mais pas `args` : le hook a vu l'intention avant l'appel,
+    donc pas moyen de le retrouver par (actor, tool, args). On ferme alors le tool.start en attente le
+    plus récent pour ce (actor, tool) — cet appel n'aura jamais de tool.end — pour qu'un nouvel essai
+    identique (mêmes actor/tool/args) n'hérite pas à tort du refus du précédent en volant sa place dans
+    la file FIFO."""
     debut, fin = evenements[0], evenements[-1]
     appels, en_attente = [], {}
     for e in evenements:
         if e["kind"] == "tool.start":
             appel = {"tool": e["tool"], "input": {"args": e["args"]}, "output": None, "ok": False}
             appels.append(appel)
-            en_attente.setdefault((e["actor"], e["tool"], e["args"]), []).append(appel)
+            en_attente.setdefault((e["actor"], e["tool"], e["args"]), []).append((e["seq"], appel))
         elif e["kind"] == "tool.end":
             file = en_attente.get((e["actor"], e["tool"], e["args"]), [])
-            appel = file.pop(0) if file else None
+            appel = file.pop(0)[1] if file else None
             if appel is None:   # un tool.end sans tool.start : on le garde, c'est un fait
                 appel = {"tool": e["tool"], "input": {"args": e["args"]}}
                 appels.append(appel)
             appel.update({"output": e.get("out"), "ok": bool(e["ok"]), "latency_ms": int(e["ms"])})
+        elif e["kind"] == "hook.deny" and e.get("event") == "PreToolUse" and "tool" in e:
+            candidats = [(seq, cle) for cle, file in en_attente.items()
+                         if cle[0] == e["actor"] and cle[1] == e["tool"] for seq, _ in file]
+            if candidats:
+                seq_max, cle = max(candidats, key=lambda x: x[0])
+                file = en_attente[cle]
+                for i, (seq, _) in enumerate(file):
+                    if seq == seq_max:
+                        del file[i]
+                        break
     totaux = fin["totals"]
     run = {
         "contract_version": "1.0",
