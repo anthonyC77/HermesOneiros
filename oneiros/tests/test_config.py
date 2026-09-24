@@ -77,6 +77,39 @@ def test_auto_slots_resolve_to_the_main_model():
     assert config.resolve_model("review") == "cheap-model"
 
 
+def test_a_slot_goes_local_only_when_both_halves_are_set():
+    config = cfg.Config(model="main-model")
+    assert config.resolve_base_url("review") == ""
+
+    # An endpoint alone is not enough: the slot still runs the main model, and
+    # the main model does not live on the local box.
+    config.local_base_url = "http://192.168.1.50:1235"
+    assert config.resolve_base_url("review") == ""
+
+    # A slot model alone is not enough either — that is the existing
+    # cheaper-model arbitrage, and it stays on the Claude API.
+    other = cfg.Config(model="main-model", review_model="qwen-local")
+    assert other.resolve_base_url("review") == ""
+
+    config.review_model = "qwen-local"
+    assert config.resolve_base_url("review") == "http://192.168.1.50:1235"
+    # Slots are independent: dreaming was not opted in.
+    assert config.resolve_base_url("dream") == ""
+
+
+def test_no_configuration_can_route_conversation_to_the_local_endpoint():
+    # SPEC.md §6: conversation runs on the main model. There is no
+    # `conversation_model` slot, so the guard is structural rather than a check
+    # someone has to remember to write in the runner.
+    config = cfg.Config(
+        model="main-model",
+        local_base_url="http://192.168.1.50:1235",
+        review_model="qwen-local",
+        dream_model="qwen-local",
+    )
+    assert config.resolve_base_url("conversation") == ""
+
+
 def test_config_round_trips(isolated_state):
     original = cfg.Config(model="m", rem_enabled=True, rem_token_budget=1234)
     original.save()

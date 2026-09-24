@@ -189,6 +189,12 @@ class Config:
     review_model: str = AUTO
     #: Model for dream passes (SPEC.md §5).
     dream_model: str = AUTO
+    #: Anthropic-compatible endpoint for auxiliary passes. Empty = the Claude
+    #: API. A local runtime speaks OpenAI, so this points at a translating
+    #: bridge rather than at the runtime itself.
+    #:
+    #: Only auxiliary slots can be sent here — see :meth:`resolve_base_url`.
+    local_base_url: str = ""
 
     # --- memory (SPEC.md E1, E5) ------------------------------------------
     memory_char_limit: int = 2200
@@ -232,6 +238,29 @@ class Config:
         """
         chosen = getattr(self, f"{slot}_model", AUTO)
         return self.model if not chosen or chosen == AUTO else str(chosen)
+
+    def resolve_base_url(self, slot: str) -> str:
+        """Return the endpoint for an auxiliary slot; empty means the Claude API.
+
+        A slot goes local only when the operator has done *both* things: named a
+        model for that slot, and configured an endpoint. Either alone leaves it
+        on the default. Routing a pass to a cheaper model and routing it to
+        another machine are separate decisions, and neither should imply the
+        other.
+
+        The conversation runner never reaches this method — it has no
+        ``*_model`` slot — so no configuration here can move a live, interactive
+        session onto the local box. That is the point: the auxiliary passes are
+        the ones nobody waits for and whose output is staged before it counts
+        (SPEC.md §6), which is what makes a slower, weaker model acceptable
+        there and not in conversation.
+        """
+        if not self.local_base_url:
+            return ""
+        chosen = getattr(self, f"{slot}_model", AUTO)
+        if not chosen or chosen == AUTO:
+            return ""
+        return self.local_base_url
 
     def workspace_path(self) -> Path:
         path = Path(self.workspace).expanduser()
