@@ -303,6 +303,15 @@ utilisés, identifiant de session, coût), gestion des erreurs et de l'annulatio
 qui fait exister skills, subagents, commandes et fichiers de contexte. Le
 retirer désactive silencieusement toute la boucle d'apprentissage : le mettre
 sous test.
+
+Second point, posé d'avance parce qu'il est trivial à prévoir et pénible à
+rétro-ajouter : l'endpoint n'est pas toujours l'API Claude. `Config` porte
+`local_base_url` et `resolve_base_url(slot)` — le runner lit ce dernier au lieu
+de supposer l'API. Un créneau ne part en local que si l'opérateur a fait les
+**deux** gestes (nommer un modèle pour ce créneau **et** configurer un
+endpoint) ; la conversation n'a pas de créneau, donc aucune configuration ne
+peut l'y router. Couvert par `tests/test_config.py`.
+
 **Fait quand.** Test d'intégration : un tour qui invoque un skill du plugin
 prouve que les sources de réglages sont bien chargées.
 **Dépend de.** T21
